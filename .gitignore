@@ -15,3 +15,12 @@ uv.lock
 .idea/
 .DS_Store
 *.log
+
+# ── 本地专用：个人配置、工具与产出，不进版本库 ──────────────
+# 本地项目配置（含机器上的绝对路径）与 KamaClaude skill
+.kama/
+# Codex 的本地 skill 与配置
+.codex/
+.agents/
+# 练习与产出目录（.kama/context.md 约定的产出位置）
+workspace/

@@ -11,52 +11,56 @@ from dotenv import load_dotenv
 _DEFAULT_HOST = "127.0.0.1"
 _DEFAULT_PORT = 7437
 _DEFAULT_LOG_LEVEL = "INFO"
-_DEFAULT_LOG_FILE = "~/.kama/logs/core.log"
+_DEFAULT_LOG_FILE = "~/.kama/logs/core.log" #默认日志存储路径
 _DEFAULT_LOG_FORMAT = "text"
-_DEFAULT_CONFIG_PATH = "~/.kama/config.toml"
+_DEFAULT_CONFIG_PATH = "~/.kama/config.toml" # 默认读取toml路径
 
-
+# dataclass是纯数据类，没有行为
+#代表日志的子配置
 @dataclass
 class LoggingConfig:
-    level: str = _DEFAULT_LOG_LEVEL
-    file: str = _DEFAULT_LOG_FILE
-    format: str = _DEFAULT_LOG_FORMAT  # "text" | "json"
+    level: str = _DEFAULT_LOG_LEVEL # 日志的门槛，基于这个级别会被丢弃
+    file: str = _DEFAULT_LOG_FILE # 写入位置
+    format: str = _DEFAULT_LOG_FORMAT  # "text" | "json" # 排版结构
 
+# 程序运行需要的全部配置
 
 @dataclass
 class KamaConfig:
-    host: str = _DEFAULT_HOST
-    port: int = _DEFAULT_PORT
-    logging: LoggingConfig = field(default_factory=LoggingConfig)
+    host: str = _DEFAULT_HOST # 网络地址
+    port: int = _DEFAULT_PORT #  监听端口号
+    logging: LoggingConfig = field(default_factory=LoggingConfig) # 上述嵌入到子配置
 
 
 # 构建并返回运行时配置：默认值 → TOML → .env → 系统环境变量（后者优先级最高）
 def get_config() -> KamaConfig:
-    config = KamaConfig()
+    config = KamaConfig() #获取配置
 
     # .env 必须在读取 KAMA_CONFIG 之前加载，以便 .env 中的 KAMA_CONFIG 能影响 TOML 路径
-    load_dotenv(".env", override=False)
+    load_dotenv(".env", override=False) # 最优先读取.env的对应值，并且保证不被覆盖
 
+    # 决定读取哪个toml文件，优先使用环境变量KAMA_CONFIG，没有就使用默认路径。expanduser负责把~展开
     config_path = Path(os.environ.get("KAMA_CONFIG", _DEFAULT_CONFIG_PATH)).expanduser()
 
     if config_path.exists():
         try:
             with open(config_path, "rb") as f:
-                data = tomllib.load(f)
+                data = tomllib.load(f) #把toml文件解析成Python字典
         except tomllib.TOMLDecodeError as e:
             raise SystemExit(f"Config parse error ({config_path}): {e}") from e
-        _apply_toml(config, data)
+        _apply_toml(config, data) # 把解析出来的字典写进config中并检验
 
-    _apply_env(config)
+    _apply_env(config) # 用环境变量覆盖config对应字段
     return config
 
 
 # 将已解析的 TOML 根表写入 config；未知小节或类型错误时退出进程
 def _apply_toml(config: KamaConfig, data: dict[str, Any]) -> None:
     unknown = set(data.keys()) - {"core", "logging"}
+    #  如果检查到data.keys中除了core和logging以外还有数据就会退出
     if unknown:
         raise SystemExit(f"Unknown top-level config keys: {', '.join(sorted(unknown))}")
-
+    # 检查host和port是否写入
     if "core" in data:
         core = data["core"]
         if not isinstance(core, dict):
@@ -74,11 +78,12 @@ def _apply_toml(config: KamaConfig, data: dict[str, Any]) -> None:
             if not isinstance(val, int):
                 raise SystemExit("Config error: core.port must be an integer")
             config.port = val
-
+    # 检查日志情况以及其中字段的格式情况
     if "logging" in data:
         log = data["logging"]
         if not isinstance(log, dict):
             raise SystemExit("Config error: [logging] must be a table")
+        # 出现了额外的日志
         unknown_log: set[str] = set(log.keys()) - {"level", "file", "format"}
         if unknown_log:
             raise SystemExit(f"Unknown [logging] keys: {', '.join(sorted(unknown_log))}")
@@ -92,6 +97,7 @@ def _apply_toml(config: KamaConfig, data: dict[str, Any]) -> None:
 
 # 用 KAMA_* 环境变量覆盖 config 中对应字段（若变量已设置）
 def _apply_env(config: KamaConfig) -> None:
+    # os.environ.get()返回None说明没有设置，否则获取并修改
     host = os.environ.get("KAMA_HOST")
     if host is not None:
         config.host = host
