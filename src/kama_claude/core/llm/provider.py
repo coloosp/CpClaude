@@ -28,13 +28,14 @@ class AnthropicProvider:
         if client is None:
             api_key = os.environ.get("ANTHROPIC_API_KEY")
             if not api_key:
-                raise SystemExit("ANTHROPIC_API_KEY not set")
+                raise SystemExit("ANTHROPIC_API_KEY not set") #主动抛出一个 SystemExit 异常，这个异常会让程序直接崩溃
             self._client: Any = anthropic.AsyncAnthropic(api_key=api_key)
         else:
-            self._client = client
-        self._model = model
+            self._client = client #已经初始化了
+        self._model = model # 使用默认模型
 
     # 流式调用 Anthropic API，逐 token 发布事件并返回 LlmResponse
+    # 检查消息历史，工具注册表，事件总线，run身份
     async def chat(
         self,
         messages: list[dict[str, object]],
@@ -42,10 +43,12 @@ class AnthropicProvider:
         bus: EventBus,
         run_id: str,
     ) -> LlmResponse:
+        # 这是告诉监听者使用了哪个模型
         await bus.publish(
             LlmModelSelectedEvent(run_id=run_id, model=self._model, strategy="static", ts=_now())
         )
 
+        # _SYSTEM_PROMPT在上面，也就是提前告诉大模型该干嘛
         system: list[dict[str, object]] = [
             {"type": "text", "text": _SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}},
         ]
@@ -56,6 +59,7 @@ class AnthropicProvider:
             last["cache_control"] = {"type": "ephemeral"}
             tools = tools[:-1] + [last]
 
+        # 下面流式循环的参数
         kwargs: dict[str, object] = {
             "model": self._model,
             "max_tokens": 4096,
@@ -67,16 +71,19 @@ class AnthropicProvider:
 
         text_parts: list[str] = []
 
+        #流式循环
         async with self._client.messages.stream(**kwargs) as stream:
             async for text in stream.text_stream:
+                # 每次收到token就发布一条LlmTokenEvent，StdoutPrinter 收到后立即打印
                 await bus.publish(LlmTokenEvent(run_id=run_id, token=text, ts=_now()))
-                text_parts.append(text)
-            final_message = await stream.get_final_message()
+                text_parts.append(text) #最后返回的LlmReponse
+            final_message = await stream.get_final_message()#获取最终的完整消息
 
         usage = final_message.usage
         cache_read: int = getattr(usage, "cache_read_input_tokens", 0) or 0
         cache_create: int = getattr(usage, "cache_creation_input_tokens", 0) or 0
 
+        # 发布token用量统计信息事件
         await bus.publish(
             LlmUsageEvent(
                 run_id=run_id,
@@ -88,6 +95,7 @@ class AnthropicProvider:
             )
         )
 
+        在final_message提取工具调用信息,转化成ToolCallBlock
         tool_calls: list[ToolCallBlock] = []
         for block in final_message.content:
             if block.type == "tool_use":
@@ -95,8 +103,9 @@ class AnthropicProvider:
                     ToolCallBlock(id=block.id, name=block.name, input=dict(block.input))
                 )
 
+        
         return LlmResponse(
-            stop_reason=final_message.stop_reason or "end_turn",
+            stop_reason=final_message.stop_reason or "end_turn",#如果token用完我们也会end_turn
             tool_calls=tool_calls,
             text="".join(text_parts),
             usage=UsageStats(
