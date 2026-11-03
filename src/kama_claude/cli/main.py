@@ -21,7 +21,8 @@ def main() -> None:
 
     run_parser = subparsers.add_parser("run", help="Run an agent task")
     run_parser.add_argument("--goal", required=True, help="Goal for the agent to accomplish")
-
+    
+    # 一些关于kama-core的操作命令
     core_parser = subparsers.add_parser("core", help="Manage the core daemon")
     core_sub = core_parser.add_subparsers(dest="core_command")
     core_sub.add_parser("start", help="Start the daemon in the background")
