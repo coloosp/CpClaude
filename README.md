@@ -30,6 +30,15 @@ uv run kama ping            # 验证连通：应返回 pong
 uv run kama --version       # 应输出 0.0.1
 ```
 
+## 终端界面
+
+```bash
+uv run kama-tui             # 原教学版：保留基础布局与学习注释
+uv run coloop-tui           # 增强版：事件流、运行概览与快捷操作
+```
+
+两个界面均支持 `--replay RUN_ID` 回放历史运行；守护进程需提前启动。
+
 ## 文档
 
 - **[RUNBOOK.md](./RUNBOOK.md)** — 完整操作参考：配置、开发命令、故障排查

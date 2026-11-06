@@ -43,11 +43,13 @@ class AgentRunner:
         run_id = run_id or new_run_id()
         run_path = self._runs_dir / run_id
         run_path.mkdir(parents=True, exist_ok=True)
-
+        # 事件总线，没有就新建一个
         bus = self._bus if self._bus is not None else EventBus()
+        # 额外需要订阅的handler，也注册到事件总线中
         for h in self._extra_handlers:
             bus.subscribe(h)
 
+        # 上下文对象，包含 run_id、goal、最大步数等信息
         context = ExecutionContext(
             run_id=run_id,
             goal=goal,
@@ -55,12 +57,13 @@ class AgentRunner:
         )
 
         async with EventWriter(run_path / "events.jsonl") as writer:
-            writer.subscribe(bus)
+            writer.subscribe(bus) # 将writer订阅到事件总线中，所有事件都会写入对应路径的 events.jsonl 文件
             await bus.publish(RunStartedEvent(run_id=run_id, goal=goal, ts=_now()))
 
+            # 组装 LLMProvider、ToolRegistry、AgentLoop，执行 run
             provider = self._provider or AnthropicProvider(self._config.llm.default_model)
             registry = ToolRegistry()
-            registry.register(ReadFileTool())
+            registry.register(ReadFileTool()) # 这个阶段只有 ReadFileTool 工具可用
             loop = AgentLoop(provider, registry, bus)
 
             cancelled = False
@@ -71,6 +74,7 @@ class AgentRunner:
                 if not context.is_done():
                     context.mark_failed("cancelled")
 
+            # 发布RunFinishedEvent事件
             await bus.publish(
                 RunFinishedEvent(
                     run_id=run_id,

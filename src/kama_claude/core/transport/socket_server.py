@@ -25,6 +25,8 @@ logger = logging.getLogger(__name__)
 type CommandHandler = Callable[[dict[str, Any]], Awaitable[Any]]
 
 # 每个连接处理协程中，当前正在处理的 writer（供 handler 读取连接上下文）
+# 此时StreamWriter还并没有被传入handler中，所以需要一个上下文变量来保存当前连接的writer对象
+# _writer_var更像是当前上下文存取值的接口或者管理器？
 _writer_var: ContextVar[asyncio.StreamWriter] = ContextVar("_writer_var")
 
 
@@ -41,16 +43,17 @@ class SocketServer:
     ) -> None:
         self._host = host
         self._port = port
-        self._handlers: dict[str, CommandHandler] = {}
+        self._handlers: dict[str, CommandHandler] = {} #方法名->handler的映射表
         self._server: asyncio.AbstractServer | None = None
         self._broadcaster = broadcaster
 
-    # 注册一个方法名对应的命令处理函数
+    # 注册一个方法名对应的命令处理函数，方法名->handler 的映射关系存储在 self._handlers 中
     def register(self, method: str, handler: CommandHandler) -> None:
         self._handlers[method] = handler
 
     # 启动 TCP 服务器；若端口已被占用则退出进程
     async def start(self) -> str:
+        #连接测试，如果连接成功说明端口已经被占用，直接退出
         try:
             _r, w = await asyncio.open_connection(self._host, self._port)
             w.close()
@@ -58,7 +61,7 @@ class SocketServer:
             raise SystemExit(f"core already running at {self._host}:{self._port}")
         except (ConnectionRefusedError, OSError):
             pass
-
+        #监听TCP端口，创建一个socket server控制对象，handle_connection是当监听到客户端连接时的回调函数
         self._server = await asyncio.start_server(
             self._handle_connection,
             host=self._host,
@@ -80,10 +83,11 @@ class SocketServer:
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
     ) -> None:
+        #记录客户端的IP地址和端口号
         peer = writer.get_extra_info("peername", "<unknown>")
         logger.debug("client connected: %s", peer)
         try:
-            await self._read_loop(reader, writer)
+            await self._read_loop(reader, writer) #读取循环
         finally:
             if self._broadcaster is not None:
                 self._broadcaster.unsubscribe(writer)
@@ -95,6 +99,7 @@ class SocketServer:
             logger.debug("client disconnected: %s", peer)
 
     # 持续读取换行分隔的 JSON 行并逐行分发处理
+    #读取并处理，是不是很熟悉？
     async def _read_loop(
         self,
         reader: asyncio.StreamReader,
@@ -110,12 +115,12 @@ class SocketServer:
             if not line:
                 return
 
-            await self._handle_line(line, writer)
+            await self._handle_line(line, writer) #解析读取信息
 
     # 解析单行 JSON-RPC 请求并调用对应 handler，将结果或错误写回客户端
     async def _handle_line(self, line: bytes, writer: asyncio.StreamWriter) -> None:
         try:
-            raw: Any = json.loads(line)
+            raw: Any = json.loads(line) #获取原始json数据
         except json.JSONDecodeError as e:
             await self._send(writer, make_error(None, PARSE_ERROR, f"Parse error: {e}"))
             return
@@ -126,7 +131,7 @@ class SocketServer:
             await self._send(writer, make_error(None, INVALID_REQUEST, "Invalid Request", str(e)))
             return
 
-        handler = self._handlers.get(req.method)
+        handler = self._handlers.get(req.method) # 获取映射表中对应方法名的处理函数
         if handler is None:
             await self._send(
                 writer,
@@ -134,9 +139,9 @@ class SocketServer:
             )
             return
 
-        _writer_var.set(writer)
+        _writer_var.set(writer)# 存入事件上下文变量中，供 handler 读取连接上下文
         try:
-            result = await handler(req.params)
+            result = await handler(req.params) # 执行对应handler
         except ValidationError as e:
             await self._send(
                 writer,
@@ -149,9 +154,9 @@ class SocketServer:
             return
 
         result_data: Any = result.model_dump() if isinstance(result, BaseModel) else result
-        await self._send(writer, JsonRpcSuccess(id=req.id, result=result_data))
+        await self._send(writer, JsonRpcSuccess(id=req.id, result=result_data)) # 发送成功响应到TCP客户端
 
     # 将 pydantic 消息序列化为 JSON 行并写入流，随后刷新缓冲区
     async def _send(self, writer: asyncio.StreamWriter, msg: BaseModel) -> None:
         writer.write(msg.model_dump_json().encode() + b"\n")
-        await writer.drain()
+        await writer.drain() # 等待缓冲区刷新完成，确保数据发送出去

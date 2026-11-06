@@ -26,6 +26,7 @@ class IpcEventBroadcaster:
         self._subscriptions: list[_Subscription] = []
 
     # 注册一个客户端订阅，返回 subscription_id
+    # global表示不限定某一次agnet运行，可以接收不同run_id的事件，不过本阶段，每个对话只会持续一轮
     def subscribe(
         self,
         writer: asyncio.StreamWriter,
@@ -38,6 +39,7 @@ class IpcEventBroadcaster:
         return sub_id
 
     # 移除指定 writer 的所有订阅
+    # 保留所有writer不是指定writer的订阅，从而删除属于这个连接的订阅
     def unsubscribe(self, writer: asyncio.StreamWriter) -> None:
         self._subscriptions = [s for s in self._subscriptions if s.writer is not writer]
 
@@ -47,7 +49,7 @@ class IpcEventBroadcaster:
         event_type: str = event_dict.get("type", "")
         run_id: str | None = event_dict.get("run_id")
 
-        dead: list[asyncio.StreamWriter] = []
+        dead: list[asyncio.StreamWriter] = [] # 存储死连接列表
 
         for sub in list(self._subscriptions):
             if not self._matches_topic(event_type, sub.topics):
@@ -56,6 +58,7 @@ class IpcEventBroadcaster:
                 continue
             try:
                 envelope = EventPushEnvelope(event=event_dict)
+                # 写入TCP连接缓冲中
                 sub.writer.write(envelope.model_dump_json().encode() + b"\n")
                 await sub.writer.drain()
             except (ConnectionResetError, BrokenPipeError, OSError):
