@@ -68,7 +68,7 @@ class AnthropicProvider:
             kwargs["tools"] = tools
 
         text_parts: list[str] = []
-
+        #整个流式请求的入口，发送请求并取得后续接收响应的流对象
         async with self._client.messages.stream(**kwargs) as stream:
             async for text in stream.text_stream:
                 await bus.publish(LlmTokenEvent(run_id=run_id, token=text, ts=_now()))
