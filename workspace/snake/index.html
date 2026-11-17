@@ -1,0 +1,56 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>贪吃蛇</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-content: center; gap: 8px;
+         background: #111; color: #ddd; font: 14px/1.4 system-ui, sans-serif; text-align: center; }
+  canvas { background: #1b1b1b; border-radius: 6px; display: block; }
+</style>
+<div>得分：<b id="score">0</b></div>
+<canvas id="cv" width="300" height="300"></canvas>
+<div id="tip">方向键 / WASD 操控，空格重开</div>
+<script src="logic.js"></script>
+<script>
+(() => {
+  const CELL = 15, COLS = 20, ROWS = 20;
+  const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+  const scoreEl = document.getElementById("score");
+  const S = SnakeLogic;
+  let state;
+
+  function reset() {
+    state = S.createState(COLS, ROWS);
+    scoreEl.textContent = "0";
+  }
+  reset();
+
+  const KEYMAP = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right",
+                   w: "up", s: "down", a: "left", d: "right" };
+  addEventListener("keydown", (e) => {
+    const k = KEYMAP[e.key] || KEYMAP[e.key.toLowerCase()];
+    if (k) { e.preventDefault(); S.turn(state, k); }
+    else if (e.key === " ") { e.preventDefault(); if (state.over) reset(); }
+  });
+
+  function draw() {
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    const r = (p, c) => { ctx.fillStyle = c; ctx.fillRect(p.x * CELL + 1, p.y * CELL + 1, CELL - 2, CELL - 2); };
+    if (state.food) r(state.food, "#e8534a");
+    state.snake.forEach((p, i) => r(p, i === 0 ? "#8ae234" : "#4e9a06"));
+    if (state.over) {
+      ctx.fillStyle = "rgba(0,0,0,.6)"; ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.font = "20px system-ui";
+      ctx.fillText("游戏结束，得分 " + state.score, cv.width / 2, cv.height / 2);
+    }
+  }
+
+  let acc = 0, last = performance.now(), SPEED = 8; // 每秒步数
+  function loop(t) {
+    acc += (t - last) / 1000; last = t;
+    while (acc >= 1 / SPEED) { acc -= 1 / SPEED; S.step(state); if (state.eaten) scoreEl.textContent = state.score; }
+    draw();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>

@@ -32,16 +32,19 @@ class BashTool(BaseTool):
 
     # 在子进程中执行 shell 命令，合并 stdout/stderr，超时或非零退出码时返回错误
     async def invoke(self, params: dict[str, object]) -> ToolResult:
+        #读取命令与最长等待时间
         command = str(params["command"])
         timeout = min(int(str(params.get("timeout") or _DEFAULT_TIMEOUT)), 120)
 
         try:
+            #让 asyncio 创建一个子进程来执行 shell 命令，捕获 stdout 和 stderr
             proc = await asyncio.create_subprocess_shell(
                 command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
             try:
+                # 等待子进程完成，并设置超时时间，超时则杀死进程
                 stdout_bytes, _ = await asyncio.wait_for(
                     proc.communicate(), timeout=timeout
                 )
@@ -55,7 +58,8 @@ class BashTool(BaseTool):
                 )
         except Exception as exc:
             return ToolResult(content=str(exc), is_error=True, error_type="runtime_error")
-
+        # 将输出直接转换成字符串，超出 64 KB 则截断，并在末尾加上 "[truncated]" 提示
+        #[truncated]是为了告诉用户输出被截断了，避免误解为完整输出
         output = stdout_bytes.decode("utf-8", errors="replace")
         truncated = len(stdout_bytes) > _MAX_OUTPUT_BYTES
         if truncated:

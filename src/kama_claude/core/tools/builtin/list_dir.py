@@ -34,17 +34,21 @@ class ListDirTool(BaseTool):
     # 以树状格式列出目录内容，深度和条数有上限
     async def invoke(self, params: dict[str, object]) -> ToolResult:
         path_str = str(params.get("path") or ".")
+        # 限制最大深度，防止过深的递归
         max_depth = min(int(str(params.get("max_depth") or 2)), _MAX_DEPTH)
 
+        # 防止路径穿越攻击，禁止使用 ".." 来访问上级目录
         if ".." in Path(path_str).parts:
             raise PermissionError(f"path traversal not allowed: {path_str}")
 
+        #获取绝对路径并检查是否存在且是目录
         root = Path(path_str)
         if not root.exists():
             raise FileNotFoundError(f"no such directory: {path_str}")
         if not root.is_dir():
             raise NotADirectoryError(f"not a directory: {path_str}")
 
+        #收集目录内容，按树状格式输出，限制最大深度和最大条目数
         lines: list[str] = [str(root) + "/"]
         count = 0
 

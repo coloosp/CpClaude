@@ -13,6 +13,7 @@ def _now() -> str:
 
 class TaskManager:
     # 初始化：确保目录存在，扫描现有文件确定下一个 ID
+    # 使用整数作为id，初始因为没有任务文件，所以从1开始
     def __init__(self, tasks_dir: Path) -> None:
         self._dir = tasks_dir
         self._dir.mkdir(parents=True, exist_ok=True)
@@ -37,6 +38,7 @@ class TaskManager:
     # 将任务写入对应 JSON 文件
     def _save(self, task: Task) -> None:
         path = self._dir / f"task_{task.id}.json"
+        # 将任务对象序列化为字典并写入 JSON 文件，确保格式美观且支持非 ASCII 字符
         path.write_text(json.dumps(task.to_dict(), indent=2, ensure_ascii=False))
 
     # 创建新任务，写入 JSON 文件，返回 Task
@@ -80,15 +82,17 @@ class TaskManager:
         if status is not None:
             if status not in ("pending", "in_progress", "completed"):
                 raise ValueError(f"invalid status: {status!r}")
-            task.status = status
+            task.status = status #更新状态
             if status == "completed":
-                self._clear_dependency(task_id)
+                self._clear_dependency(task_id) #如果任务完成，清理其他任务的 blocked_by 列表
+        # 增加依赖，并去重
         if add_blocked_by:
             task.blocked_by = list(set(task.blocked_by + add_blocked_by))
+        # 移除依赖
         if remove_blocked_by:
             task.blocked_by = [x for x in task.blocked_by if x not in remove_blocked_by]
-        task.updated_at = _now()
-        self._save(task)
+        task.updated_at = _now() #更新更新时间
+        self._save(task) #写回
         return task
 
     # 返回所有任务，按 ID 升序排列
@@ -108,7 +112,8 @@ class TaskManager:
                 data = json.loads(f.read_text())
             except (ValueError, json.JSONDecodeError):
                 continue
-            blocked = [int(x) for x in data.get("blocked_by", [])]
+            # blocked是所有被阻塞的任务id列表
+            blocked = [int(x) for x in data.get("blocked_by", [])] 
             if completed_id in blocked:
                 data["blocked_by"] = [x for x in blocked if x != completed_id]
                 data["updated_at"] = _now()

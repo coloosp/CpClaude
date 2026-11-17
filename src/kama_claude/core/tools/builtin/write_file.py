@@ -32,9 +32,10 @@ class WriteFileTool(BaseTool):
 
     # 写入文件内容；超 1MB 拒绝；禁止 .. 路径遍历；自动创建父目录
     async def invoke(self, params: dict[str, object]) -> ToolResult:
-        path_str = str(params["path"])
-        content = str(params["content"])
+        path_str = str(params["path"]) #写入路径
+        content = str(params["content"]) #写入内容
 
+        # 不允许路径遍历，访问上一级目录
         if ".." in Path(path_str).parts:
             raise PermissionError(f"path traversal not allowed: {path_str}")
 
@@ -47,7 +48,7 @@ class WriteFileTool(BaseTool):
             )
 
         path = Path(path_str)
-        path.parent.mkdir(parents=True, exist_ok=True)
+        path.parent.mkdir(parents=True, exist_ok=True) #确保父目录存在
         path.write_text(content, encoding="utf-8")
 
         return ToolResult(content=f"wrote {len(encoded)} bytes to {path_str}")

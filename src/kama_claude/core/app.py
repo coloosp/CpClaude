@@ -81,7 +81,8 @@ class CoreApp:
         runner = AgentRunner(self._config, bus=self._bus, trace=self._trace)
         run_task = asyncio.create_task(runner.run(cmd.goal, run_id=run_id))
         self._running_runs.add(run_task)
-        run_task.add_done_callback(self._running_runs.discard)
+        # 将 run_task 的完成回调注册为从 _running_runs 中移除该任务，以便在任务完成后清理
+        run_task.add_done_callback(self._running_runs.discard) #当run_task完成时，从_running_runs中移除
         return AgentRunResult(run_id=run_id)
 
     # 注册客户端事件订阅，可选先回放 events.jsonl 历史再接收实时流

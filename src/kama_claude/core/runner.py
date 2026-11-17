@@ -110,7 +110,7 @@ class AgentRunner:
                     self._trace,
                     include_payload=self._config.trace.include_llm_payload,
                 )
-            registry = self._build_registry(task_manager)
+            registry = self._build_registry(task_manager) #将 TaskManager 注入到工具注册表中，将8个任务相关工具注册到注册表中
             loop = AgentLoop(provider, registry, bus)
 
             cancelled = False

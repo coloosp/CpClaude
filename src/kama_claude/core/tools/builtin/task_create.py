@@ -7,12 +7,14 @@ from kama_claude.core.tools.base import BaseTool, ToolResult
 
 
 class TaskCreateTool(BaseTool):
+    # name和description其实是说给LLM看的，告诉它这个工具是干什么的，输入输出是什么格式
     name = "task_create"
     description = (
         "Create a new task to track a unit of work. "
         "Use this to break down a complex goal into smaller, trackable steps. "
         "Returns the created task as JSON."
     )
+    # 输入参数的 JSON schema，告诉 LLM 这个工具需要什么参数，参数类型和描述
     input_schema: dict[str, object] = {
         "type": "object",
         "properties": {

@@ -147,9 +147,9 @@ class KamaTuiApp(App[None]):
 
     # 向日志视图追加一个 widget 并滚动到底部
     def _append(self, widget: Widget) -> None:
-        log_view = self.query_one("#log-view", VerticalScroll)
-        log_view.mount(widget)
-        log_view.scroll_end(animate=False)
+        log_view = self.query_one("#log-view", VerticalScroll) #找到 VerticalScroll 容器
+        log_view.mount(widget) #将 widget 挂载到 VerticalScroll 容器中
+        log_view.scroll_end(animate=False) #滚动到底部
 
     # 结束当前 LLM 流式块（下一个 token 将开启新块）
     def _break_llm(self) -> None:
@@ -187,7 +187,7 @@ class KamaTuiApp(App[None]):
                 }
                 if self._replay_run_id is not None:
                     params["replay_from_run"] = self._replay_run_id
-                await client.send_command("event.subscribe", params)
+                await client.send_command("event.subscribe", params) #订阅事件，向eventbus注册
                 await loop_task
             except IpcError as e:
                 header.update(f"[bold]KamaClaude[/bold]  [red]subscribe error: {e}[/red]")
@@ -207,11 +207,12 @@ class KamaTuiApp(App[None]):
 
         if t == "llm.token":
             token = event.get("token", "")
+            # 如果当前没有 LLMStreamBlock，则创建一个新的并追加到日志视图中
             if self._current_llm is None:
                 llm_block = LLMStreamBlock()
                 self._append(llm_block)
                 self._current_llm = llm_block
-            self._current_llm.append_token(token)
+            self._current_llm.append_token(token) # 否则直接追加并刷新显示
             return
 
         self._break_llm()
@@ -237,15 +238,16 @@ class KamaTuiApp(App[None]):
             tool_name = str(event.get("tool_name", ""))
             params = event.get("params") or {}
             tc_block = ToolCallBlock(tool_name, params)
-            self._pending_tool_blocks[tool_use_id] = tc_block
-            self._append(tc_block)
+            self._pending_tool_blocks[tool_use_id] = tc_block #根据 tool_use_id 存储工具调用块，方便后续更新结果
+            self._append(tc_block) # 把工具块挂在到滚动容器中
 
         elif t == "tool.call_finished":
             tool_use_id = str(event.get("tool_use_id", ""))
             elapsed_ms = int(event.get("elapsed_ms") or 0)
             output = str(event.get("output") or "")
+            # 通过 tool_use_id 找到对应的工具调用块，并更新结果
             if tool_use_id in self._pending_tool_blocks:
-                tc_done = self._pending_tool_blocks.pop(tool_use_id)
+                tc_done = self._pending_tool_blocks.pop(tool_use_id)#将对应的工具调用块从 pending 中移除并获取
                 tc_done.set_result(output, elapsed_ms)
 
         elif t == "tool.call_failed":
@@ -253,7 +255,7 @@ class KamaTuiApp(App[None]):
             elapsed_ms = int(event.get("elapsed_ms") or 0)
             error_msg = str(event.get("error_message") or "")
             if tool_use_id in self._pending_tool_blocks:
-                tc_done = self._pending_tool_blocks.pop(tool_use_id)
+                tc_done = self._pending_tool_blocks.pop(tool_use_id) #将对应的工具调用块从 pending 中移除
                 tc_done.set_result(error_msg, elapsed_ms, is_error=True)
 
         elif t == "run.finished":
