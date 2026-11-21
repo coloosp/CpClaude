@@ -99,9 +99,13 @@ class AgentRunner:
         store: SessionStore | None = None,
     ) -> RunOutcome:
         run_id = run_id or new_run_id()
+        # 除非使用上面的run来调用run_and_capture否则不会进入else分支
         if session is not None and store is not None:
+            # 获取当前轮次的run目录位置
             run_path = store.runs_dir(session.id) / run_id
+            #从thread.jsonl中获取历史对话与工具调用以及结果，也包含刚保存的本轮用户消息
             history = store.read_messages(session.id)
+            #可能需要保存的其他信息等
             notes = store.read_notes(session.id)
         else:
             run_path = self._runs_dir / run_id
@@ -166,6 +170,7 @@ class AgentRunner:
                 )
             )
 
+        #保存本轮新增session到thread.json
         if session is not None and store is not None:
             store.append_messages(session.id, context.messages[prefill_len:], run_id=run_id)
 

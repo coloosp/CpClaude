@@ -165,12 +165,14 @@ class ChatTextArea(TextArea):
     # Enter 提交；Cmd/Shift/Alt+Enter 插入换行；其余键交回 TextArea 默认行为
     async def _on_key(self, event: events.Key) -> None:
         key = event.key
+        #enter提交
         if key == "enter":
             event.stop()
             event.prevent_default()
             if self.text.strip():
-                self.post_message(self.Submitted(self))
+                self.post_message(self.Submitted(self)) #创建Submitted实例，将消息放进输入框中的消息队列
             return
+        # Shift/Alt+Enter 插入换行
         if key in ("alt+enter", "shift+enter", "ctrl+j", "super+enter"):
             event.stop()
             event.prevent_default()
@@ -185,7 +187,7 @@ class KamaTuiApp(App[None]):
 
     TITLE = "KamaClaude"
     BINDINGS = [
-        Binding("ctrl+q", "quit", "quit"),
+        Binding("f10", "quit", "quit"),
     ]
     CSS = """
     Screen { background: $background; }
@@ -224,10 +226,12 @@ class KamaTuiApp(App[None]):
     def compose(self) -> ComposeResult:
         yield Label("[bold]KamaClaude[/bold]  [dim]connecting...[/dim]", id="header")
         yield VerticalScroll(id="log-view")
+        # 创建ChatTexArea实例叫作prompt
         yield ChatTextArea(id="prompt", show_line_numbers=False)
 
     def on_mount(self) -> None:
         self.run_worker(self._socket_loop(), exclusive=True, name="socket")
+        # 获取输入框
         prompt = self.query_one("#prompt", ChatTextArea)
         prompt.disabled = True
         prompt.border_title = "connecting..."
@@ -343,13 +347,18 @@ class KamaTuiApp(App[None]):
                 }
                 if self._replay_run_id is not None:
                     params["replay_from_run"] = self._replay_run_id
+                # 注册IPC事件广播
                 await client.send_command("event.subscribe", params)
+                # 发出创建session命令
                 created = await client.send_command("session.create", {"mode": "chat"})
                 self._session_id = str(created["session_id"])
+                # 获取ChatTextArea实例
                 prompt = self._prompt()
                 if prompt is not None:
-                    prompt.disabled = False
+                    prompt.disabled = False #使用输入框
+                    #边框标题
                     prompt.border_title = "type a message — enter to send, ⌘/⇧/⌥+enter for newline"
+                    # 让输入框获得键盘焦点
                     prompt.focus()
                 self._update_header("ready")
                 await loop_task

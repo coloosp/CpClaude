@@ -29,6 +29,7 @@ class NoteSaveTool(BaseTool):
 
     # 将非空 content 追加到 session notes.md
     async def invoke(self, params: dict[str, object]) -> ToolResult:
+        # 取出content并清理首尾空白
         content = str(params.get("content", "")).strip()
         if not content:
             return ToolResult(
@@ -36,5 +37,6 @@ class NoteSaveTool(BaseTool):
                 is_error=True,
                 error_type="runtime_error",
             )
+        # 将笔记追加到当前session的note.md，如果不存在就创建
         self._store.append_note(self._session_id, content, self._run_id)
         return ToolResult(content="saved")

@@ -98,15 +98,16 @@ class CoreApp:
 
     # 创建 chat 或 one_shot session，并返回 session_id
     async def _session_create_handler(self, params: dict[str, Any]) -> SessionCreateResult:
-        assert self._sessions is not None
-        cmd = SessionCreateCommand.model_validate(params)
-        session = await self._sessions.create(mode=cmd.mode, title=cmd.title)
+        assert self._sessions is not None 
+        cmd = SessionCreateCommand.model_validate(params) #校验参数并生成cmd对象
+        session = await self._sessions.create(mode=cmd.mode, title=cmd.title) #创建session
         return SessionCreateResult(session_id=session.id, status=session.status)
 
     # 向 session 发送一条用户消息并同步等待对应 run 完成
     async def _session_send_handler(self, params: dict[str, Any]) -> SessionSendMessageResult:
         assert self._sessions is not None
         cmd = SessionSendMessageCommand.model_validate(params)
+        # 发送消息并等待 run 完成，返回 run_id
         run_id = await self._sessions.send_message(cmd.session_id, cmd.content)
         return SessionSendMessageResult(run_id=run_id)
 

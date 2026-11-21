@@ -35,6 +35,7 @@ class SessionStore:
     # 将 session meta 写入 meta.json
     def write_meta(self, session: Session) -> None:
         path = self.session_dir(session.id)
+        # 以写入模式打开文件，文件不存在就创建否则清空原内容再写入
         path.mkdir(parents=True, exist_ok=True)
         (path / "meta.json").write_text(
             json.dumps(session.to_dict(), ensure_ascii=False, indent=2) + "\n",
@@ -79,10 +80,11 @@ class SessionStore:
 
     # 读取完整 thread 并返回可直接传给 Anthropic 的 messages
     def read_messages(self, sid: str) -> list[dict[str, Any]]:
+        # 找到对应的thread.jsonl
         path = self.session_dir(sid) / "thread.jsonl"
         if not path.exists():
             return []
-
+        # 逐行解析JSON，跳过空行，无法解析的行以及未知角色
         messages: list[dict[str, Any]] = []
         for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             if not line:
@@ -101,9 +103,9 @@ class SessionStore:
                     role,
                 )
                 continue
-            messages.append({"role": role, "content": row.get("content", "")})
+            messages.append({"role": role, "content": row.get("content", "")}) #取出每条记录中的role，content加入消息列表
 
-        return self._trim_orphan_tool_use(messages)
+        return self._trim_orphan_tool_use(messages) #裁去尚未配齐工具结果的消息片段
 
     # 裁掉尾部未配对 tool_use 以及其后的消息，避免 Anthropic messages.invalid
     def _trim_orphan_tool_use(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
